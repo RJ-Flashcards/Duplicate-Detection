@@ -1,9 +1,33 @@
+// === script.js (drop-in replacement) ===
 
 const sheetURL = 'https://raw.githubusercontent.com/RJ-Flashcards/Flashcard-app3/main/vocab.csv';
 
 let flashcards = [];
 let currentCard = 0;
 let isFlipped = false;
+
+/* ---------------------------
+   Duplicate detection helpers
+---------------------------- */
+// Build a case-insensitive frequency map of terms
+function buildTermCounts(cards) {
+  const counts = {};
+  cards.forEach(({ term }) => {
+    const key = (term || '').trim().toLowerCase();
+    if (!key) return;
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  return counts;
+}
+
+// Return a new array with isDuplicate flag on each card
+function tagDuplicates(cards) {
+  const counts = buildTermCounts(cards);
+  return cards.map(c => ({
+    ...c,
+    isDuplicate: counts[(c.term || '').trim().toLowerCase()] > 1
+  }));
+}
 
 function fetchFlashcards() {
   fetch(sheetURL)
@@ -15,10 +39,20 @@ function fetchFlashcards() {
     })
     .then(data => {
       const lines = data.trim().split('\n');
+
+      // Expecting CSV with a header row: Word,Definition
+      // If your header is different, this still ignores the first line.
       flashcards = lines.slice(1).map(line => {
         const [term, definition] = line.split(',');
-        return { term: term.trim(), definition: definition.trim() };
+        return {
+          term: (term || '').trim(),
+          definition: (definition || '').trim()
+        };
       });
+
+      // Tag duplicates BEFORE shuffling (ordering doesn’t matter for tagging)
+      flashcards = tagDuplicates(flashcards);
+
       shuffleFlashcards();
       displayCard();
     })
@@ -40,8 +74,23 @@ function displayCard() {
   const back = document.getElementById('card-back');
   const card = flashcards[currentCard];
 
-  front.innerText = card.term;
-  back.innerText = card.definition;
+  // FRONT: set text first
+  front.textContent = card.term || '';
+
+  // If duplicate, append a small triangle icon (⚠️)
+  if (card.isDuplicate) {
+    const icon = document.createElement('span');
+    icon.className = 'dup-flag';
+    icon.title = 'Duplicate word';
+    icon.setAttribute('aria-label', 'Duplicate word');
+    icon.textContent = '⚠️'; // triangle-style warning icon
+    icon.style.marginLeft = '0.4rem'; // inline spacing so you don’t need CSS if you don’t want it
+    icon.style.opacity = '0.9';
+    front.appendChild(icon);
+  }
+
+  // BACK
+  back.textContent = card.definition || '';
 
   // Keep the card in its current flipped state
   const flashcard = document.getElementById('flashcard');
@@ -78,6 +127,3 @@ document.getElementById('back-btn')?.addEventListener('click', (e) => {
 });
 
 fetchFlashcards();
-
-
-
