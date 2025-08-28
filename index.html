@@ -102,12 +102,12 @@
 
   <script>
   window.addEventListener('DOMContentLoaded', () => {
-    // ========= 0) CONFIG (per student) =========
+    // ========= 0) CONFIG =========
     const PUBLISH_URL   = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRWUSF1fL4A_CKtOa_2uVA7OxUJvF4g_kMnaAXC5mP0NFoCiZZ8JBgrkiRPEV4ZvSt2Rf5AcpeKbT7G/pub';
     const DOC_ID        = '1egKFlO7GDTO234Mk_MtJRAmXOyJg0MLdDe3njfnLvwY';
     const DISCOVERY_URL = 'https://script.google.com/macros/s/AKfycbwhsRy8QwpudMYNc2QRnAcsqHIajuhaMUMxDjrPM0fSGj9MRLm7adS5XIg01eoKjRFxXw/exec';
 
-    // Allow-list controls
+    // Allow-list
     const COURSE_DAYS = 24;
     const EXTRA_TABS = ["A-Z Word Bank", "Everyday Phrasal Verbs", "Business Phrasal Verbs", "Proverbs"];
     const ALLOWED = new Set([
@@ -242,7 +242,7 @@
         flag.className = 'dup-flag';
         flag.title = 'Duplicate word';
         flag.setAttribute('aria-label', 'Duplicate word');
-        flag.textContent = '▲'; // fallback glyph even if CSS pseudo fails
+        flag.textContent = '▲'; // fallback glyph
         front.appendChild(flag);
       }
 
@@ -310,17 +310,27 @@
     }
 
     function loadByGid(gid) {
+      if (!gid) {
+        console.error('[Load] Missing gid for selected tab.');
+        front.textContent = "Error loading data.";
+        back.textContent  = "";
+        return;
+      }
       const urlTSV = `${PUBLISH_URL}?gid=${gid}&single=true&output=tsv`;
       const urlCSV = `${PUBLISH_URL}?gid=${gid}&single=true&output=csv`;
+      console.log('[Load] Trying TSV:', urlTSV);
       fetch(urlTSV)
-        .then(r => r.ok ? r.text() : Promise.reject())
-        .catch(() => fetch(urlCSV).then(r => r.text()))
+        .then(r => r.ok ? r.text() : Promise.reject(new Error('TSV not ok')))
+        .catch(() => {
+          console.warn('[Load] TSV failed, trying CSV:', urlCSV);
+          return fetch(urlCSV).then(r => {
+            if (!r.ok) throw new Error('CSV not ok');
+            return r.text();
+          });
+        })
         .then(text => {
           cards = parseRows(text);
-          // Compute duplicates for THIS deck
           duplicateCounts = buildTermCounts(cards);
-
-          // Quick debug (open DevTools → Console)
           console.log('[Dupes] cards:', cards.length, 'distinct:', Object.keys(duplicateCounts).length);
 
           isFlipped = false;
@@ -337,18 +347,24 @@
     }
 
     // ========= 7) Discover worksheets (names → gid) with robust fallbacks =========
+    // NOTE: define a safe empty fallback so we never crash
+    const sheetGIDs = {}; // ← stays empty unless you manually add { "A-Z Word Bank": "123456789" }
+
     async function fetchGidMap() {
-      // 7a) Apps Script (preferred)
+      // 7a) Apps Script
       try {
         const url = `${DISCOVERY_URL}?id=${encodeURIComponent(DOC_ID)}`;
         const res = await fetch(url, { cache: 'no-store' });
         if (res.ok) {
           const j = await res.json();
-          if (j && Object.keys(j).length) return j;
+          if (j && Object.keys(j).length) {
+            console.log('[Discover] Apps Script map:', j);
+            return j;
+          }
         }
-      } catch (e) { console.warn('Apps Script discovery failed:', e); }
+      } catch (e) { console.warn('[Discover] Apps Script failed:', e); }
 
-      // 7b) Public worksheets feed (works if Published to web)
+      // 7b) Public worksheets feed
       try {
         const url = `https://spreadsheets.google.com/feeds/worksheets/${DOC_ID}/public/basic?alt=json`;
         const res = await fetch(url);
@@ -362,12 +378,15 @@
             const gid = link ? (new URL(link.href)).searchParams.get('gid') : null;
             if (name && gid) out[name] = gid;
           }
-          if (Object.keys(out).length) return out;
+          if (Object.keys(out).length) {
+            console.log('[Discover] Public feed map:', out);
+            return out;
+          }
         }
-      } catch (e) { console.warn('Legacy feed discovery failed:', e); }
+      } catch (e) { console.warn('[Discover] Public feed failed:', e); }
 
-      // 7c) Last resort: hard-coded map (sheetGIDs must exist in your file)
-      console.warn('Using hard-coded sheetGIDs fallback.');
+      // 7c) Manual fallback (safe no-crash)
+      console.warn('[Discover] Using manual fallback map:', sheetGIDs);
       return sheetGIDs;
     }
 
@@ -381,6 +400,7 @@
           if (ma) return -1; if (mb) return 1;
           return a.localeCompare(b);
         });
+      console.log('[Discover] Allowed names:', names);
       for (const name of names) {
         const opt = document.createElement('option');
         opt.value = name; opt.textContent = name; opt.dataset.gid = map[name];
@@ -390,6 +410,7 @@
 
     dropdown.addEventListener("change", () => {
       const gid = dropdown.selectedOptions[0]?.dataset?.gid;
+      console.log('[UI] Change →', dropdown.value, 'gid:', gid);
       if (gid) loadByGid(gid);
     });
 
@@ -405,16 +426,27 @@
           front.classList.add('error');
           front.textContent = "No allowed tabs found.\n\nCheck:\n• COURSE_DAYS & EXTRA_TABS\n• Sheet is published (File → Share → Publish to the web → Entire document)";
           back.textContent = "";
+          console.warn('[Init] allowedMap empty. discoveredMap=', discoveredMap);
           return;
         }
 
         populateDropdown(allowedMap);
 
-        const defaultName = allowedMap['Day 1'] ? 'Day 1' : Object.keys(allowedMap)[0];
+        const defaultName = allowedMap['A-Z Word Bank'] ? 'A-Z Word Bank'
+                         : allowedMap['Day 1'] ? 'Day 1'
+                         : Object.keys(allowedMap)[0];
         dropdown.value = defaultName;
-        loadByGid(allowedMap[defaultName]);
+
+        const gid = allowedMap[defaultName];
+        console.log('[Init] Default deck =', defaultName, 'gid:', gid);
+        if (gid) loadByGid(gid);
+        else {
+          front.textContent = "Error loading data.";
+          back.textContent  = "";
+          console.error('[Init] No gid for defaultName.');
+        }
       } catch (err) {
-        console.error(err);
+        console.error('[Init] Startup error:', err);
         front.classList.add('error');
         front.textContent = "Startup error. Open DevTools → Console for details.";
         back.textContent = "";
