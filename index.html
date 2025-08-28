@@ -3,49 +3,54 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-
   <title>Vocabulary Flashcards</title>
 
   <link rel="stylesheet" href="style.css" />
   <style>
    *,*::before,*::after { box-sizing: border-box; }
-body {
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-  margin: 0;                       /* no page margin on mobile */
-  color: #111;
-  -webkit-text-size-adjust: 100%;  /* prevents odd zoom on iOS */
-}
-.page {
-  max-width: 720px;                /* center the whole page */
-  margin: 0 auto;
-  padding: 24px;
-  /* include iPhone safe-area paddings so it never looks shifted */
-  padding-left: calc(24px + env(safe-area-inset-left));
-  padding-right: calc(24px + env(safe-area-inset-right));
-}
+   body {
+     font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+     margin: 0;
+     color: #111;
+     -webkit-text-size-adjust: 100%;
+   }
+   .page {
+     max-width: 720px;
+     margin: 0 auto;
+     padding: 24px;
+     padding-left: calc(24px + env(safe-area-inset-left));
+     padding-right: calc(24px + env(safe-area-inset-right));
+   }
 
-    h1 { margin-bottom: 12px; }
-    label { font-weight: 600; margin-right: 8px; }
-    select, button { font-size: 16px; }
-    .flashcard { width: 100%; max-width: 600px; height: 280px; margin: 16px auto; perspective: 1200px; }
+   h1 { margin-bottom: 12px; }
+   label { font-weight: 600; margin-right: 8px; }
+   select, button { font-size: 16px; }
+   .flashcard { width: 100%; max-width: 600px; height: 280px; margin: 16px auto; perspective: 1200px; }
 
-    .flashcard-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .35s ease; border-radius: 16px; }
-    .flashcard-inner.flipped { transform: rotateY(180deg); }
-    .flashcard-front, .flashcard-back {
-      position: absolute; inset: 0; display:flex; align-items:center; justify-content:center;
-      backface-visibility: hidden; -webkit-backface-visibility: hidden;
-      border: 1px solid #ddd; border-radius: 16px; padding: 18px; text-align:center;
-      font-size: clamp(18px, 3.2vw, 28px); background: #fff;
-      box-shadow: 0 8px 22px rgba(0,0,0,.06);
-    }
-    .flashcard-back { transform: rotateY(180deg); background:#fbfbff; }
-    .buttons { display:flex; gap:10px; justify-content:center; margin: 10px 0 18px; }
-    .buttons button { padding:10px 14px; border-radius:12px; border:1px solid #ccc; cursor:pointer; }
-    .study-controls { display:flex; flex-direction:column; gap:8px; align-items:center; margin-top:10px; }
-    .study-controls .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:center; }
-    .study-controls button, .study-controls select { padding:10px 14px; border-radius:12px; border:1px solid #ccc; font-size:16px; cursor:pointer; }
-    #logo { display:block; margin: 20px auto; width:80px; height:auto; opacity:.7; }
-    .error { white-space: pre-line; color:#b00020; text-align:center; }
+   .flashcard-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transition: transform .35s ease; border-radius: 16px; }
+   .flashcard-inner.flipped { transform: rotateY(180deg); }
+   .flashcard-front, .flashcard-back {
+     position: absolute; inset: 0; display:flex; align-items:center; justify-content:center;
+     backface-visibility: hidden; -webkit-backface-visibility: hidden;
+     border: 1px solid #ddd; border-radius: 16px; padding: 18px; text-align:center;
+     font-size: clamp(18px, 3.2vw, 28px); background: #fff;
+     box-shadow: 0 8px 22px rgba(0,0,0,.06);
+   }
+   .flashcard-back { transform: rotateY(180deg); background:#fbfbff; }
+   .buttons { display:flex; gap:10px; justify-content:center; margin: 10px 0 18px; }
+   .buttons button { padding:10px 14px; border-radius:12px; border:1px solid #ccc; cursor:pointer; }
+   .study-controls { display:flex; flex-direction:column; gap:8px; align-items:center; margin-top:10px; }
+   .study-controls .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:center; }
+   .study-controls button, .study-controls select { padding:10px 14px; border-radius:12px; border:1px solid #ccc; font-size:16px; cursor:pointer; }
+   #logo { display:block; margin: 20px auto; width:80px; height:auto; opacity:.7; }
+   .error { white-space: pre-line; color:#b00020; text-align:center; }
+
+   /* Duplicate indicator – text + CSS triangle for reliability */
+   .dup-flag { display:inline-block; line-height:1; vertical-align:baseline; opacity:.9; margin-left:.4rem; }
+   .dup-flag::after {
+     content: ""; display:inline-block; width:0; height:0; margin-left:.25rem;
+     border-left:5px solid transparent; border-right:5px solid transparent; border-bottom:8px solid currentColor;
+   }
   </style>
 
   <link rel="icon" href="logo.png" type="image/png">
@@ -98,12 +103,11 @@ body {
   <script>
   window.addEventListener('DOMContentLoaded', () => {
     // ========= 0) CONFIG (per student) =========
-    // Your links/IDs (you already provided these):
     const PUBLISH_URL   = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRWUSF1fL4A_CKtOa_2uVA7OxUJvF4g_kMnaAXC5mP0NFoCiZZ8JBgrkiRPEV4ZvSt2Rf5AcpeKbT7G/pub';
     const DOC_ID        = '1egKFlO7GDTO234Mk_MtJRAmXOyJg0MLdDe3njfnLvwY';
     const DISCOVERY_URL = 'https://script.google.com/macros/s/AKfycbwhsRy8QwpudMYNc2QRnAcsqHIajuhaMUMxDjrPM0fSGj9MRLm7adS5XIg01eoKjRFxXw/exec';
 
-    // Allow-list controls (this is all you change later):
+    // Allow-list controls
     const COURSE_DAYS = 24;
     const EXTRA_TABS = ["A-Z Word Bank", "Everyday Phrasal Verbs", "Business Phrasal Verbs", "Proverbs"];
     const ALLOWED = new Set([
@@ -127,18 +131,23 @@ body {
     const rateLearnedBtn = document.getElementById('rateLearned');
 
     let cards = []; let viewIndexes = []; let currentIndex = 0; let isFlipped = false; let shuffleOn = false;
-// Duplicate detection (per current deck)
-let duplicateCounts = null;
-const normTerm = (s) => (s || '').trim().toLowerCase();
-function buildTermCounts(pairs) {
-  const m = {};
-  for (const p of pairs) {
-    const k = normTerm(p[0]);
-    if (!k) continue;
-    m[k] = (m[k] || 0) + 1;
-  }
-  return m;
-}
+
+    // --- Duplicate detection (per current deck) ---
+    let duplicateCounts = null;
+    const normTerm = (s) => (s || '').trim().toLowerCase();
+    function buildTermCounts(pairs) {
+      const m = {};
+      for (const p of pairs) {
+        const k = normTerm(p[0]);
+        if (!k) continue;
+        m[k] = (m[k] || 0) + 1;
+      }
+      return m;
+    }
+    function isDuplicate(word) {
+      if (!duplicateCounts) return false;
+      return (duplicateCounts[normTerm(word)] || 0) > 1;
+    }
 
     // ========= 2) Flip only on card tap =========
     flashcard.addEventListener("click", (e) => {
@@ -220,27 +229,25 @@ function buildTermCounts(pairs) {
       }
       const idx = viewIndexes[currentIndex] ?? 0;
       const pair = cards[idx];
-      // Clear and build the front with an optional triangle
-front.textContent = "";
-const word = pair[0] || "";
-const wordSpan = document.createElement('span');
-wordSpan.textContent = word;
-front.appendChild(wordSpan);
 
-// If duplicate in this deck, add a small triangle (▲)
-if (duplicateCounts && duplicateCounts[normTerm(word)] > 1) {
-  const icon = document.createElement('span');
-  icon.className = 'dup-flag';
-  icon.title = 'Duplicate word';
-  icon.setAttribute('aria-label', 'Duplicate word');
-  icon.textContent = '▲';
-  icon.style.marginLeft = '0.4rem';
-  icon.style.opacity = '0.9';
-  front.appendChild(icon);
-}
+      // Front: build with optional triangle
+      front.textContent = "";
+      const word = pair[0] || "";
+      const wordSpan = document.createElement('span');
+      wordSpan.textContent = word;
+      front.appendChild(wordSpan);
 
-// Back text stays simple
-back.textContent = pair[1] || "";
+      if (isDuplicate(word)) {
+        const flag = document.createElement('span');
+        flag.className = 'dup-flag';
+        flag.title = 'Duplicate word';
+        flag.setAttribute('aria-label', 'Duplicate word');
+        flag.textContent = '▲'; // fallback glyph even if CSS pseudo fails
+        front.appendChild(flag);
+      }
+
+      // Back
+      back.textContent = pair[1] || "";
 
       cardInner.classList.toggle("flipped", isFlipped);
     }
@@ -301,29 +308,37 @@ back.textContent = pair[1] || "";
       }
       return out;
     }
+
     function loadByGid(gid) {
       const urlTSV = `${PUBLISH_URL}?gid=${gid}&single=true&output=tsv`;
       const urlCSV = `${PUBLISH_URL}?gid=${gid}&single=true&output=csv`;
       fetch(urlTSV)
         .then(r => r.ok ? r.text() : Promise.reject())
         .catch(() => fetch(urlCSV).then(r => r.text()))
-        .then(text => { cards = parseRows(text); isFlipped = false; cardInner.classList.remove("flipped"); rebuildView(false); })
         .then(text => {
-  cards = parseRows(text);
-  // NEW: compute duplicates for this deck
-  duplicateCounts = buildTermCounts(cards);
+          cards = parseRows(text);
+          // Compute duplicates for THIS deck
+          duplicateCounts = buildTermCounts(cards);
 
-  isFlipped = false;
-  cardInner.classList.remove("flipped");
-  rebuildView(false);
-})
+          // Quick debug (open DevTools → Console)
+          console.log('[Dupes] cards:', cards.length, 'distinct:', Object.keys(duplicateCounts).length);
 
-        .catch(err => { console.error('Load error:', err); front.textContent = "Error loading data."; back.textContent  = ""; cardInner.classList.remove("flipped"); viewIndexes = []; });
+          isFlipped = false;
+          cardInner.classList.remove("flipped");
+          rebuildView(false);
+        })
+        .catch(err => {
+          console.error('Load error:', err);
+          front.textContent = "Error loading data.";
+          back.textContent  = "";
+          cardInner.classList.remove("flipped");
+          viewIndexes = [];
+        });
     }
 
     // ========= 7) Discover worksheets (names → gid) with robust fallbacks =========
     async function fetchGidMap() {
-      // 7a) Try your Apps Script (preferred)
+      // 7a) Apps Script (preferred)
       try {
         const url = `${DISCOVERY_URL}?id=${encodeURIComponent(DOC_ID)}`;
         const res = await fetch(url, { cache: 'no-store' });
@@ -331,11 +346,9 @@ back.textContent = pair[1] || "";
           const j = await res.json();
           if (j && Object.keys(j).length) return j;
         }
-      } catch (e) {
-        console.warn('Apps Script discovery failed:', e);
-      }
+      } catch (e) { console.warn('Apps Script discovery failed:', e); }
 
-      // 7b) Try Google’s public worksheets feed (works if the sheet is Published to web)
+      // 7b) Public worksheets feed (works if Published to web)
       try {
         const url = `https://spreadsheets.google.com/feeds/worksheets/${DOC_ID}/public/basic?alt=json`;
         const res = await fetch(url);
@@ -351,11 +364,9 @@ back.textContent = pair[1] || "";
           }
           if (Object.keys(out).length) return out;
         }
-      } catch (e) {
-        console.warn('Legacy feed discovery failed:', e);
-      }
+      } catch (e) { console.warn('Legacy feed discovery failed:', e); }
 
-      // 7c) Last resort: use the hard-coded map in this file
+      // 7c) Last resort: hard-coded map (sheetGIDs must exist in your file)
       console.warn('Using hard-coded sheetGIDs fallback.');
       return sheetGIDs;
     }
