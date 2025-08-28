@@ -1,4 +1,4 @@
-// === script.js (drop-in replacement) ===
+// === script.js (robust duplicate triangle) ===
 
 const sheetURL = 'https://raw.githubusercontent.com/RJ-Flashcards/Flashcard-app3/main/vocab.csv';
 
@@ -7,9 +7,57 @@ let currentCard = 0;
 let isFlipped = false;
 
 /* ---------------------------
-   Duplicate detection helpers
+   Small CSV parser (handles quotes & commas)
 ---------------------------- */
-// Build a case-insensitive frequency map of terms
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (inQuotes) {
+      if (ch === '"' && next === '"') {
+        cell += '"'; // escaped quote ""
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        cell += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        row.push(cell);
+        cell = '';
+      } else if (ch === '\n') {
+        row.push(cell);
+        rows.push(row);
+        row = [];
+        cell = '';
+      } else if (ch === '\r') {
+        // ignore CR in CRLF
+      } else {
+        cell += ch;
+      }
+    }
+  }
+  // flush last cell/row
+  if (cell.length > 0 || row.length > 0) {
+    row.push(cell);
+    rows.push(row);
+  }
+  // trim whitespace around each cell
+  return rows.map(r => r.map(c => (c ?? '').trim()));
+}
+
+/* ---------------------------------------------
+   Duplicate detection (case-insensitive)
+---------------------------------------------- */
 function buildTermCounts(cards) {
   const counts = {};
   cards.forEach(({ term }) => {
@@ -20,7 +68,6 @@ function buildTermCounts(cards) {
   return counts;
 }
 
-// Return a new array with isDuplicate flag on each card
 function tagDuplicates(cards) {
   const counts = buildTermCounts(cards);
   return cards.map(c => ({
@@ -29,36 +76,46 @@ function tagDuplicates(cards) {
   }));
 }
 
+/* ---------------------------
+   Data loading & preparation
+---------------------------- */
 function fetchFlashcards() {
   fetch(sheetURL)
     .then(response => {
-      if (!response.ok) {
-        throw new Error('Failed to fetch CSV');
-      }
+      if (!response.ok) throw new Error('Failed to fetch CSV');
       return response.text();
     })
-    .then(data => {
-      const lines = data.trim().split('\n');
+    .then(text => {
+      // Parse CSV robustly
+      let rows = parseCSV(text);
 
-      // Expecting CSV with a header row: Word,Definition
-      // If your header is different, this still ignores the first line.
-      flashcards = lines.slice(1).map(line => {
-        const [term, definition] = line.split(',');
-        return {
-          term: (term || '').trim(),
-          definition: (definition || '').trim()
-        };
-      });
+      // Auto-detect and drop header if it looks like one
+      if (rows.length && rows[0].length >= 2) {
+        const h0 = rows[0][0].toLowerCase();
+        const h1 = rows[0][1].toLowerCase();
+        const looksLikeHeader =
+          (h0.includes('word') || h0.includes('term')) &&
+          (h1.includes('def') || h1.includes('meaning'));
+        if (looksLikeHeader) rows = rows.slice(1);
+      }
 
-      // Tag duplicates BEFORE shuffling (ordering doesn’t matter for tagging)
+      // Map to {term, definition}, ignore empty terms
+      flashcards = rows
+        .filter(r => r && r.length >= 1 && (r[0] ?? '').trim() !== '')
+        .map(r => ({
+          term: (r[0] ?? '').trim(),
+          definition: (r[1] ?? '').trim(),
+        }));
+
+      // Tag duplicates before shuffling
       flashcards = tagDuplicates(flashcards);
 
       shuffleFlashcards();
       displayCard();
     })
-    .catch(error => {
+    .catch(err => {
       document.getElementById('card-front').innerText = 'Error loading flashcards.';
-      console.error('Error:', error);
+      console.error('Error:', err);
     });
 }
 
@@ -69,39 +126,47 @@ function shuffleFlashcards() {
   }
 }
 
+/* ---------------------------
+   Rendering
+---------------------------- */
 function displayCard() {
   const front = document.getElementById('card-front');
   const back = document.getElementById('card-back');
   const card = flashcards[currentCard];
 
-  // FRONT: set text first
-  front.textContent = card.term || '';
+  // Clear and render front
+  front.textContent = ''; // reset entirely before adding nodes
 
-  // If duplicate, append a small triangle icon (⚠️)
+  // Word node
+  const wordNode = document.createElement('span');
+  wordNode.textContent = card.term || '';
+  front.appendChild(wordNode);
+
+  // Triangle icon if duplicate (▲)
   if (card.isDuplicate) {
     const icon = document.createElement('span');
     icon.className = 'dup-flag';
     icon.title = 'Duplicate word';
     icon.setAttribute('aria-label', 'Duplicate word');
-    icon.textContent = '⚠️'; // triangle-style warning icon
-    icon.style.marginLeft = '0.4rem'; // inline spacing so you don’t need CSS if you don’t want it
+    icon.textContent = '▲';
+    icon.style.marginLeft = '0.4rem';
     icon.style.opacity = '0.9';
     front.appendChild(icon);
   }
 
-  // BACK
+  // Back
   back.textContent = card.definition || '';
 
-  // Keep the card in its current flipped state
-  const flashcard = document.getElementById('flashcard');
-  if (isFlipped) {
-    flashcard.classList.add('flipped');
-  } else {
-    flashcard.classList.remove('flipped');
-  }
+  // Keep current flipped state
+  const flashcardEl = document.getElementById('flashcard');
+  if (isFlipped) flashcardEl.classList.add('flipped');
+  else flashcardEl.classList.remove('flipped');
 }
 
-// ✅ Flip only on card tap (never on button press)
+/* ---------------------------
+   Interaction
+---------------------------- */
+// Flip only on card tap (never on button press)
 document.getElementById('flashcard').addEventListener('click', (e) => {
   if (e.target.tagName.toLowerCase() === 'button') {
     e.stopPropagation();
@@ -112,18 +177,18 @@ document.getElementById('flashcard').addEventListener('click', (e) => {
   isFlipped = !isFlipped;
 });
 
-// ✅ Move to next card, preserve flip state
+// Next / Back, preserve flip state
 document.getElementById('next-btn')?.addEventListener('click', (e) => {
   e.stopPropagation();
   currentCard = (currentCard + 1) % flashcards.length;
   displayCard();
 });
 
-// ✅ Move to previous card, preserve flip state
 document.getElementById('back-btn')?.addEventListener('click', (e) => {
   e.stopPropagation();
   currentCard = (currentCard - 1 + flashcards.length) % flashcards.length;
   displayCard();
 });
 
+// Go!
 fetchFlashcards();
