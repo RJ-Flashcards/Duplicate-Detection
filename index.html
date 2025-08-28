@@ -127,6 +127,18 @@ body {
     const rateLearnedBtn = document.getElementById('rateLearned');
 
     let cards = []; let viewIndexes = []; let currentIndex = 0; let isFlipped = false; let shuffleOn = false;
+// Duplicate detection (per current deck)
+let duplicateCounts = null;
+const normTerm = (s) => (s || '').trim().toLowerCase();
+function buildTermCounts(pairs) {
+  const m = {};
+  for (const p of pairs) {
+    const k = normTerm(p[0]);
+    if (!k) continue;
+    m[k] = (m[k] || 0) + 1;
+  }
+  return m;
+}
 
     // ========= 2) Flip only on card tap =========
     flashcard.addEventListener("click", (e) => {
@@ -208,8 +220,28 @@ body {
       }
       const idx = viewIndexes[currentIndex] ?? 0;
       const pair = cards[idx];
-      front.textContent = pair[0] || "";
-      back.textContent  = pair[1] || "";
+      // Clear and build the front with an optional triangle
+front.textContent = "";
+const word = pair[0] || "";
+const wordSpan = document.createElement('span');
+wordSpan.textContent = word;
+front.appendChild(wordSpan);
+
+// If duplicate in this deck, add a small triangle (▲)
+if (duplicateCounts && duplicateCounts[normTerm(word)] > 1) {
+  const icon = document.createElement('span');
+  icon.className = 'dup-flag';
+  icon.title = 'Duplicate word';
+  icon.setAttribute('aria-label', 'Duplicate word');
+  icon.textContent = '▲';
+  icon.style.marginLeft = '0.4rem';
+  icon.style.opacity = '0.9';
+  front.appendChild(icon);
+}
+
+// Back text stays simple
+back.textContent = pair[1] || "";
+
       cardInner.classList.toggle("flipped", isFlipped);
     }
 
@@ -276,6 +308,16 @@ body {
         .then(r => r.ok ? r.text() : Promise.reject())
         .catch(() => fetch(urlCSV).then(r => r.text()))
         .then(text => { cards = parseRows(text); isFlipped = false; cardInner.classList.remove("flipped"); rebuildView(false); })
+        .then(text => {
+  cards = parseRows(text);
+  // NEW: compute duplicates for this deck
+  duplicateCounts = buildTermCounts(cards);
+
+  isFlipped = false;
+  cardInner.classList.remove("flipped");
+  rebuildView(false);
+})
+
         .catch(err => { console.error('Load error:', err); front.textContent = "Error loading data."; back.textContent  = ""; cardInner.classList.remove("flipped"); viewIndexes = []; });
     }
 
