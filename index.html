@@ -237,14 +237,16 @@
       wordSpan.textContent = word;
       front.appendChild(wordSpan);
 
-      if (isDuplicate(word)) {
-        const flag = document.createElement('span');
-        flag.className = 'dup-flag';
-        flag.title = 'Duplicate word';
-        flag.setAttribute('aria-label', 'Duplicate word');
-        flag.textContent = '▲'; // fallback glyph
-        front.appendChild(flag);
-      }
+if (isDuplicate(word)) {
+  const flag = document.createElement('span');
+  flag.className = 'dup-flag';
+  flag.title = 'Duplicate word';
+  flag.setAttribute('aria-label', 'Duplicate word');
+  flag.textContent = '⚠️'; // single clear caution icon
+  flag.style.marginLeft = '0.4rem';
+  front.appendChild(flag);
+}
+
 
       // Back
       back.textContent = pair[1] || "";
